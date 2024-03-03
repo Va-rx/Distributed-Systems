@@ -9,32 +9,38 @@ import java.util.*;
 public class Server extends Thread {
 
     static Map<Integer, Socket> clientSockets = new HashMap<>();
-    Integer id;
-    Socket clientSocket;
+    private Integer userId;
+    private Socket clientSocket;
 
 
     public Server(Integer id, Socket clientSocket) {
-        this.id = id;
+        userId = id;
         this.clientSocket = clientSocket;
     }
 
     public void run() {
+        String msg = "[Server] User" + userId + " has connected";
+        System.out.println(msg);
+        try {
+            broadcast(msg);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
         try {
             while(true) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
-                String msg = in.readLine();
-                System.out.println("User" + this.id + ": " + msg);
-                for (Map.Entry<Integer, Socket> entry : clientSockets.entrySet()) {
-                    Integer id = entry.getKey();
-                    Socket clientSocket = entry.getValue();
-
-
-
-                    if (!Objects.equals(id, this.id)) {
-                        PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-                        out.println("User" + this.id + ": " + msg);
-                    }
+                msg = in.readLine();
+                if(msg == null) {
+                    clientSocket.close();
+                    clientSockets.remove(userId);
+                    msg = "[Server] User" + userId + " has disconnected";
+                    System.out.println(msg);
+                    broadcast(msg);
+                    return;
                 }
+                msg = "User" + userId + ": " + msg;
+                System.out.println(msg);
+                broadcast(msg);
             }
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -44,57 +50,31 @@ public class Server extends Thread {
     public static void main(String[] args) throws IOException {
         System.out.println("JAVA TCP SERVER ");
         int portNumber = 9009;
-        int id = 0;
+        int userId = 0;
 
-        try {
-            ServerSocket serverSocket = new ServerSocket(portNumber);
-            while (true) {
-                Socket clientSocket = serverSocket.accept();
-                System.out.println("user" + id + " connected");
-                clientSockets.put(id, clientSocket);
-                (new Server(id, clientSocket)).start();
-                id = id + 1;
+        ServerSocket serverSocket = new ServerSocket(portNumber);
+        Socket clientSocket = null;
+        while(true) {
+            try {
+                clientSocket = serverSocket.accept();
+                userId += 1;
+                clientSockets.put(userId, clientSocket);
+                (new Server(userId, clientSocket)).start();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 
-//        System.out.println("JAVA TCP SERVER");
-//        int portNumber = 9009;
-//        ServerSocket serverSocket = null;
-//
-//        ArrayList<Integer> ids = new ArrayList<>();
-//        Integer id = 0;
-////        Integer newId = ids.getLast() + 1;
-//        try {
-//            // create socket
-//            serverSocket = new ServerSocket(portNumber);
-//
-//            while(true){
-//
-//                // accept client
-//                Socket clientSocket = serverSocket.accept();
-////                ids.add(id, );
-//                System.out.println("client connected");
-//
-//                // in & out streams
-//                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-//                BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-//
-//                // read msg, send response
-//                //String msg = in.readLine();
-//                //System.out.println("received msg: " + msg);
-//                out.println("Pong Java Tcp");
-//
-//            }
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//        }
-//        finally{
-//            if (serverSocket != null){
-//                serverSocket.close();
-//            }
-//        }
-//    }
+    private void broadcast(String message) throws IOException {
+        for (Map.Entry<Integer, Socket> entry : clientSockets.entrySet()) {
+            Integer id = entry.getKey();
+            Socket clientSocket = entry.getValue();
+
+            if (!Objects.equals(id, userId)) {
+                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
+                out.println(message);
+            }
+        }
+    }
 }

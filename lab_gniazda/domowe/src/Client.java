@@ -27,6 +27,10 @@ public class Client {
             try {
                 BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 response = in.readLine();
+                if (response == null) {
+                    System.out.println("Server has disconnected");
+                    System.exit(0);
+                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

@@ -49,16 +49,15 @@ public class Server extends Thread {
     public static void main(String[] args) throws IOException {
         System.out.println("JAVA TCP SERVER ");
         int portNumber = 9009;
-        int userId = 0;
-
         ServerSocket serverSocket = new ServerSocket(portNumber);
-        Socket clientSocket = null;
+
+        int userId = 0;
         while(true) {
             try {
-                clientSocket = serverSocket.accept();
-                userId += 1;
+                Socket clientSocket = serverSocket.accept();
                 clientSockets.put(userId, clientSocket);
                 (new Server(userId, clientSocket)).start();
+                userId += 1;
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }

@@ -42,7 +42,7 @@ public class Server extends Thread {
     }
 
     public static void main(String[] args) throws IOException {
-        System.out.println("JAVA TCP SERVER");
+        System.out.println("JAVA TCP SERVER ");
         int portNumber = 9009;
         int id = 0;
 

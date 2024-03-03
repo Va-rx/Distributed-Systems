@@ -9,12 +9,11 @@ import java.util.*;
 public class Server extends Thread {
 
     static Map<Integer, Socket> clientSockets = new HashMap<>();
-    private Integer userId;
-    private Socket clientSocket;
-
+    private final Integer userId;
+    private final Socket clientSocket;
 
     public Server(Integer id, Socket clientSocket) {
-        userId = id;
+        this.userId = id;
         this.clientSocket = clientSocket;
     }
 

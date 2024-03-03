@@ -7,23 +7,21 @@ import java.util.Scanner;
 
 public class Client {
 
-    private static Socket socket;
-
     public static void main(String[] args) throws IOException {
         System.out.println("JAVA TCP CLIENT");
         String hostName = "localhost";
         int portNumber = 9009;
 
-        socket = new Socket(hostName, portNumber);
+        Socket socket = new Socket(hostName, portNumber);
 
-        Thread thread1 = new Thread(Client::receiveMessage);
-        Thread thread2 = new Thread(Client::sendMessage);
+        Thread thread1 = new Thread(() -> Client.receiveMessage(socket));
+        Thread thread2 = new Thread(() -> Client.sendMessage(socket));
 
         thread1.start();
         thread2.start();
     }
 
-    private static void receiveMessage() {
+    private static void receiveMessage(Socket socket) {
         String response = null;
         while(true) {
             try {
@@ -37,7 +35,7 @@ public class Client {
 
     }
 
-    private static void sendMessage() {
+    private static void sendMessage(Socket socket) {
         PrintWriter out = null;
         while (true) {
             try {

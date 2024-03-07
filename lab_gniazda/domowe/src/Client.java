@@ -4,6 +4,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.*;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Scanner;
 
 public class Client {
@@ -13,7 +14,50 @@ public class Client {
         int portNumber = 9009;
 
 //        tcpConnection(hostName, portNumber);
-        udpConnection(hostName, portNumber);
+        Socket socket = new Socket(hostName, portNumber);
+        Thread thread1 = new Thread(() -> Client.tcpReceiveMessage(socket));
+        thread1.start();
+
+
+        while(true) {
+            Scanner scanner = new Scanner(System.in);
+            String message = scanner.nextLine();
+
+            if (Objects.equals(message, "/U")) {
+                System.out.println("Udp multi-lined message enabled");
+
+                message = "";
+                String new_line = null;
+                while(!Objects.equals(new_line, "/U")) {
+                    new_line = scanner.nextLine();
+                    message = message.concat(new_line) + "\n";
+                }
+                String[] lines = message.split("\\r?\\n");
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < lines.length - 1; i++) {
+                    sb.append(lines[i]);
+                    sb.append("\n");
+                }
+
+                // Połącz pozostałe linie
+                message = sb.toString();
+
+                try {
+                    DatagramSocket ds = null;
+                    ds = new DatagramSocket();
+                    InetAddress addr = InetAddress.getByName(hostName);
+                    byte[] sendBuffer = message.getBytes();
+                    DatagramPacket dp = new DatagramPacket(sendBuffer, sendBuffer.length, addr, portNumber);
+                    ds.send(dp);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            else {
+                tcpSendMessage(socket, message);
+            }
+        }
+//        udpConnection(hostName, portNumber);
 
 //        Thread thread1 = new Thread(() -> {
 //            try {
@@ -41,10 +85,10 @@ public class Client {
         Socket socket = new Socket(host, port);
 
         Thread thread1 = new Thread(() -> Client.tcpReceiveMessage(socket));
-        Thread thread2 = new Thread(() -> Client.tcpSendMessage(socket));
+        //Thread thread2 = new Thread(() -> Client.tcpSendMessage(socket, host, port));
 
         thread1.start();
-        thread2.start();
+        //thread2.start();
     }
 
     private static void tcpReceiveMessage(Socket socket) {
@@ -62,63 +106,20 @@ public class Client {
             }
             System.out.println(response);
         }
-
     }
 
-    private static void tcpSendMessage(Socket socket) {
+    private static void tcpSendMessage(Socket socket, String message) throws IOException {
         PrintWriter out = null;
-        while (true) {
-            try {
-                out = new PrintWriter(socket.getOutputStream(), true);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-            Scanner scanner = new Scanner(System.in);
-            String message = scanner.nextLine();
-            out.println(message);
-        }
-    }
-
-    private static void udpConnection(String host, int port) throws Exception{
-        System.out.println("JAVA UDP CLIENT");
-
-        Thread thread1 = new Thread(() -> Client.udpReceiveMessage(host, port));
-        Thread thread2 = new Thread(() -> Client.udpSendMessage(host, port));
-
-        thread1.start();
-        thread2.start();
-    }
-
-    private static void udpReceiveMessage(String host, int port) {
-        DatagramSocket ds = null;
-        byte[] buff = new byte[1024];
-        Arrays.fill(buff, (byte)0);
-        try {
-            ds = new DatagramSocket();
-            while(true) {
-                DatagramPacket dp = new DatagramPacket(buff, buff.length);
-                ds.receive(dp);
-                String response = new String(dp.getData());
-                System.out.println(response);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static void udpSendMessage(String host, int port) {
-        DatagramSocket ds = null;
-        try {
-            ds = new DatagramSocket();
-            InetAddress addr = InetAddress.getByName(host);
-            while(true) {
-                Scanner scanner = new Scanner(System.in);
-                byte[] message = scanner.nextLine().getBytes();
-                DatagramPacket dp = new DatagramPacket(message, message.length, addr, port);
-                ds.send(dp);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        out = new PrintWriter(socket.getOutputStream(), true);
+        out.println(message);
+//        while (true) {
+////            try {
+////                out = new PrintWriter(socket.getOutputStream(), true);
+////            } catch (IOException e) {
+////                throw new RuntimeException(e);
+////            }
+////            Scanner scanner = new Scanner(System.in);
+////            String message = scanner.nextLine();out.println(message);
+//        }
     }
 }

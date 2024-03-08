@@ -1,13 +1,18 @@
 import java.net.InetAddress;
+import java.net.Socket;
 import java.util.Objects;
 
 public class ClientAddress {
     private InetAddress ip;
     private Integer port;
+    private Socket socket;
+    private Integer id;
 
-    public ClientAddress(InetAddress ip, Integer port) {
+    public ClientAddress(InetAddress ip, Integer port, Socket socket, Integer id) {
         this.ip = ip;
         this.port = port;
+        this.socket = socket;
+        this.id = id;
     }
 
     public InetAddress getIp() {
@@ -26,16 +31,21 @@ public class ClientAddress {
         this.port = port;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        ClientAddress that = (ClientAddress) o;
-        return Objects.equals(ip, that.ip) && Objects.equals(port, that.port);
+    public Socket getSocket() {
+        return socket;
     }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(ip, port);
+    public void setCs(Socket socket) {
+        this.socket = socket;
     }
+
+    public Integer getId() {
+        return id;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
+    }
+
+
 }

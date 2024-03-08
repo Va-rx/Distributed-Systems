@@ -8,54 +8,52 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 public class Server {
-    private static Map<Integer, Socket> clientSockets = new HashMap<>();
-    private ServerSocket serverSocket;
+    private static final List<ClientAddress> addresses = new ArrayList<>();
 
     public void run(int port) throws IOException {
-        serverSocket = new ServerSocket(port);
-        Thread UDPconnection = new Thread(new UDPConnection(port));
-        UDPconnection.start();
+        ServerSocket serverSocket = new ServerSocket(port);
+        Thread udpConnection = new Thread(new UDPConnection(port));
+        udpConnection.start();
+
+        Integer clientId = 0;
         while (true) {
             Socket clientSocket = serverSocket.accept();
-            Thread TCPconnection = new Thread(new TCPConnection(clientSocket));
-            TCPconnection.start();
+            Thread tcpConnection = new Thread(new TCPConnection(clientSocket, clientId));
+            tcpConnection.start();
+            clientId += 1;
         }
-    }
-
-    public static Integer getNumOfClients() {
-        return clientSockets.size();
     }
 
     private static class TCPConnection implements Runnable {
-        private final Socket clientSocket;
-        private final Integer clientId;
+        ClientAddress client;
         private static final Lock lock = new ReentrantLock();
 
-        public TCPConnection(Socket socket) {
-            this.clientSocket = socket;
-            this.clientId = getNumOfClients();
+        public TCPConnection(Socket socket, Integer id) {
+            this.client = new ClientAddress(socket.getInetAddress(), socket.getPort(), socket, id);
         }
 
         public void run() {
-            clientSockets.put(clientId, this.clientSocket);
-            String msg = "[Server] User" + clientId + " has joined the chat.";
+            if (!addresses.contains(client)) {
+                addresses.add(client);
+                String msg = "[Server] User" + client.getId() + " has joined the chat.";
+                broadcast(msg);
+            }
 
             try {
-                broadcast(msg);
                 while (true) {
-                    BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
-                    msg = in.readLine();
+                    BufferedReader in = new BufferedReader(new InputStreamReader(this.client.getSocket().getInputStream()));
+                    String msg = in.readLine();
                     if (msg == null) {
                         lock.lock();
-                        clientSockets.remove(clientId);
-                        clientSocket.close();
+                        addresses.remove(this.client);
+                        this.client.getSocket().close();
                         lock.unlock();
 
-                        msg = "[Server] User" + clientId + " has disconnected";
+                        msg = "[Server] User" + this.client.getId() + " has disconnected";
                         broadcast(msg);
                         return;
                     }
-                    msg = "User" + clientId + ": " + msg;
+                    msg = "User" + this.client.getId() + ": " + msg;
                     broadcast(msg);
                 }
             } catch (Exception e) {
@@ -64,25 +62,23 @@ public class Server {
         }
 
         // broadcast sender's msg to other clients
-        private void broadcast(String message) throws IOException {
+        private void broadcast(String message) {
             System.out.println(message);
-
-            for (Map.Entry<Integer, Socket> entry : clientSockets.entrySet()) {
-                Socket clientSocket = entry.getValue();
-
-                if (!Objects.equals(clientSocket, this.clientSocket)) {
-                    PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-                    out.println(message);
+            try {
+                for (ClientAddress data : addresses) {
+                    if (!Objects.equals(this.client, data)) {
+                        PrintWriter out = new PrintWriter(data.getSocket().getOutputStream(), true);
+                        out.println(message);
+                    }
                 }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
 
     private static class UDPConnection implements Runnable {
-
         private final DatagramSocket ds;
-        List<ClientAddress> addresses = new ArrayList<>();
-
 
         public UDPConnection(Integer port) throws SocketException {
             this.ds = new DatagramSocket(port);
@@ -96,57 +92,39 @@ public class Server {
                     DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
                     this.ds.receive(receivePacket);
 
-                    InetAddress clientAddress = receivePacket.getAddress();
-                    Integer clientPort =receivePacket.getPort();
-                    ClientAddress ca = new ClientAddress(clientAddress, clientPort);
-                    if (!addresses.contains(ca)) {
-                        addresses.add(ca);
-                        System.out.println("Dodano:" + clientAddress + " " + clientPort);
-
+                    InetAddress clientIp = receivePacket.getAddress();
+                    Integer clientPort = receivePacket.getPort();
+                    Integer clientId = null;
+                    for (ClientAddress data : addresses) {
+                        if (clientIp.equals(data.getIp()) && clientPort.equals(data.getPort())) {
+                            clientId = data.getId();
+                        }
                     }
 
                     String msg = new String(receivePacket.getData());
-//                    msg = "User" + clientId + ": " + msg;
-                    msg = "User unknown: " + msg;
-                    broadcast(msg, clientPort, clientAddress);
-
+                    msg = "User" + clientId + ": " + msg;
+                    broadcast(msg, clientId);
                 }
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
 
-        private void broadcast(String message, Integer sender_port, InetAddress sender_address) throws IOException {
-            //System.out.println(message);
+        private void broadcast(String message, Integer clientId) throws IOException {
+            System.out.println(message);
             byte[] sendBuffer = message.getBytes();
-//            System.out.println("Ponizej lista");
             for (ClientAddress data : addresses) {
-//                System.out.println("port" + data.getPort());
-//                System.out.println("ip" + data.getIp());
-                if(!Objects.equals(sender_port, data.getPort())) {
-                    DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, sender_address, data.getPort());
-                    System.out.println("Sent to" + data.getPort());
+                if(!Objects.equals(clientId, data.getId())) {
+                    DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, data.getIp(), data.getPort());
                     ds.send(sendPacket);
                 }
             }
-//            for (Map.Entry<Integer, Socket> entry : clientSockets.entrySet()) {
-//                Socket clientSocket = entry.getValue();
-//                Integer userId = entry.getKey();
-////                System.out.println(userId + " " + clientSocket.getPort());
-////                System.out.println("DS: " + this.ds.getPort());
-//
-//                if (!Objects.equals(sender_port, clientSocket.getPort())) {
-//                    DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, clientSocket.getInetAddress(), clientSocket.getPort());
-////                    System.out.println("Powinienem wyslac: " + userId);
-//                    ds.send(sendPacket);
-//                }
-//            }
         }
     }
 
-        public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException {
             Server server = new Server();
             server.run(9009);
         }
-    }
+}
 

@@ -2,77 +2,129 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.*;
 import java.util.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
-public class Server extends Thread {
+public class Server {
+    private static final List<ClientAddress> addresses = new ArrayList<>();
 
-    static Map<Integer, Socket> clientSockets = new HashMap<>();
-    private final Integer userId;
-    private final Socket clientSocket;
+    public void run(int port) throws IOException {
+        ServerSocket serverSocket = new ServerSocket(port);
+        Thread udpConnection = new Thread(new UDPConnection(port));
+        udpConnection.start();
 
-    public Server(Integer id, Socket clientSocket) {
-        this.userId = id;
-        this.clientSocket = clientSocket;
+        Integer clientId = 0;
+        while (true) {
+            Socket clientSocket = serverSocket.accept();
+            Thread tcpConnection = new Thread(new TCPConnection(clientSocket, clientId));
+            tcpConnection.start();
+            clientId += 1;
+        }
     }
 
-    public void run() {
-        String msg = "[Server] User" + userId + " has connected";
-        System.out.println(msg);
-        try {
-            broadcast(msg);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+    private static class TCPConnection implements Runnable {
+        ClientAddress client;
+        private static final Lock lock = new ReentrantLock();
+
+        public TCPConnection(Socket socket, Integer id) {
+            this.client = new ClientAddress(socket.getInetAddress(), socket.getPort(), socket, id);
         }
-        try {
-            while(true) {
-                BufferedReader in = new BufferedReader(new InputStreamReader(this.clientSocket.getInputStream()));
-                msg = in.readLine();
-                if(msg == null) {
-                    clientSocket.close();
-                    clientSockets.remove(userId);
-                    msg = "[Server] User" + userId + " has disconnected";
-                    System.out.println(msg);
-                    broadcast(msg);
-                    return;
-                }
-                msg = "User" + userId + ": " + msg;
-                System.out.println(msg);
+
+        public void run() {
+            if (!addresses.contains(client)) {
+                addresses.add(client);
+                String msg = "[Server] User" + client.getId() + " has joined the chat.";
                 broadcast(msg);
             }
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+
+            try {
+                while (true) {
+                    BufferedReader in = new BufferedReader(new InputStreamReader(this.client.getSocket().getInputStream()));
+                    String msg = in.readLine();
+                    if (msg == null) {
+                        lock.lock();
+                        addresses.remove(this.client);
+                        this.client.getSocket().close();
+                        lock.unlock();
+
+                        msg = "[Server] User" + this.client.getId() + " has disconnected";
+                        broadcast(msg);
+                        return;
+                    }
+                    msg = "User" + this.client.getId() + ": " + msg;
+                    broadcast(msg);
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        // broadcast sender's msg to other clients
+        private void broadcast(String message) {
+            System.out.println(message);
+            try {
+                for (ClientAddress data : addresses) {
+                    if (!Objects.equals(this.client, data)) {
+                        PrintWriter out = new PrintWriter(data.getSocket().getOutputStream(), true);
+                        out.println(message);
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private static class UDPConnection implements Runnable {
+        private final DatagramSocket ds;
+
+        public UDPConnection(Integer port) throws SocketException {
+            this.ds = new DatagramSocket(port);
+        }
+
+        public void run() {
+            byte[] receiveBuffer = new byte[1024];
+            try {
+                while (true) {
+                    Arrays.fill(receiveBuffer, (byte) 0);
+                    DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+                    this.ds.receive(receivePacket);
+
+                    InetAddress clientIp = receivePacket.getAddress();
+                    Integer clientPort = receivePacket.getPort();
+                    Integer clientId = null;
+                    for (ClientAddress data : addresses) {
+                        if (clientIp.equals(data.getIp()) && clientPort.equals(data.getPort())) {
+                            clientId = data.getId();
+                        }
+                    }
+
+                    String msg = new String(receivePacket.getData());
+                    msg = "User" + clientId + ": " + msg;
+                    broadcast(msg, clientId);
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        private void broadcast(String message, Integer clientId) throws IOException {
+            System.out.println(message);
+            byte[] sendBuffer = message.getBytes();
+            for (ClientAddress data : addresses) {
+                if(!Objects.equals(clientId, data.getId())) {
+                    DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, data.getIp(), data.getPort());
+                    ds.send(sendPacket);
+                }
+            }
         }
     }
 
     public static void main(String[] args) throws IOException {
-        System.out.println("JAVA TCP SERVER ");
-        int portNumber = 9009;
-        ServerSocket serverSocket = new ServerSocket(portNumber);
-
-        int userId = 0;
-        while(true) {
-            try {
-                Socket clientSocket = serverSocket.accept();
-                clientSockets.put(userId, clientSocket);
-                (new Server(userId, clientSocket)).start();
-                userId += 1;
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            Server server = new Server();
+            server.run(9009);
         }
-    }
-
-    private void broadcast(String message) throws IOException {
-        for (Map.Entry<Integer, Socket> entry : clientSockets.entrySet()) {
-            Integer id = entry.getKey();
-            Socket clientSocket = entry.getValue();
-
-            if (!Objects.equals(id, userId)) {
-                PrintWriter out = new PrintWriter(clientSocket.getOutputStream(), true);
-                out.println(message);
-            }
-        }
-    }
 }
+

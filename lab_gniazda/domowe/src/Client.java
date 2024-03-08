@@ -60,15 +60,37 @@ public class Client {
                 }
             }
             else if(Objects.equals(message, "/M")) {
-                message = "trololo";
-                ms.leaveGroup(group);
+                System.out.println("Udp multicast multi-lined message enabled");
+
+                message = "";
+                String new_line = null;
+                while(!Objects.equals(new_line, "/M")) {
+                    new_line = scanner.nextLine();
+                    message = message.concat(new_line) + "\n";
+                }
+                String[] lines = message.split("\\r?\\n");
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < lines.length - 1; i++) {
+                    sb.append(lines[i]);
+                    sb.append("\n");
+                }
+                message = sb.toString();
+
                 DatagramPacket dp = new DatagramPacket(message.getBytes(), message.length(), group, portMulti);
+                ms.leaveGroup(group);
                 ms.send(dp);
+                ms.joinGroup(group);
             }
             else {
                 tcpSendMessage(socket, message);
             }
         }
+    }
+
+    private Socket establishTcpConnection(String hostname, int port) throws IOException {
+
+
+        return new Socket(hostname, port);
     }
 
     private static void tcpReceiveMessage(Socket socket) {

@@ -14,20 +14,10 @@ public class Client {
         int portNumber = 9009;
 
         Socket socket = new Socket(hostName, portNumber);
-        DatagramSocket ds = new DatagramSocket();
-
-
-        givePort(ds, hostName, portNumber);
-//        tcpConnection(hostName, portNumber);
+        DatagramSocket ds = new DatagramSocket(socket.getLocalPort());
 
         Thread thread1 = new Thread(() -> Client.tcpReceiveMessage(socket));
-        Thread thread2 = new Thread(() -> {
-            try {
-                Client.udpReceiveMessage(ds);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        Thread thread2 = new Thread(() -> Client.udpReceiveMessage(ds));
         thread1.start();
         thread2.start();
 
@@ -50,16 +40,12 @@ public class Client {
                     sb.append(lines[i]);
                     sb.append("\n");
                 }
-
-                // Połącz pozostałe linie
                 message = sb.toString();
 
                 try {
-                    //DatagramSocket ds = null;
                     InetAddress addr = InetAddress.getByName(hostName);
                     byte[] sendBuffer = message.getBytes();
                     DatagramPacket dp = new DatagramPacket(sendBuffer, sendBuffer.length, addr, portNumber);
-                    System.out.println("Na tym wysyłam udp" + ds.getLocalPort() + ds.getLocalAddress());
                     ds.send(dp);
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -69,42 +55,9 @@ public class Client {
                 tcpSendMessage(socket, message);
             }
         }
-//        udpConnection(hostName, portNumber);
-
-//        Thread thread1 = new Thread(() -> {
-//            try {
-//                Client.tcpConnection(hostName, portNumber);
-//            } catch (IOException e) {
-//                throw new RuntimeException(e);
-//            }
-//        });
-//        Thread thread2 = new Thread(() -> {
-//            try {
-//                Client.udpConnection(hostName, portNumber);
-//            } catch (Exception e) {
-//                throw new RuntimeException(e);
-//            }
-//        });
-//
-//        thread1.start();
-//        thread2.start();
-    }
-
-
-    private static void tcpConnection(String host, int port) throws IOException {
-        System.out.println("JAVA TCP CLIENT");
-
-        Socket socket = new Socket(host, port);
-
-        Thread thread1 = new Thread(() -> Client.tcpReceiveMessage(socket));
-        //Thread thread2 = new Thread(() -> Client.tcpSendMessage(socket, host, port));
-
-        thread1.start();
-        //thread2.start();
     }
 
     private static void tcpReceiveMessage(Socket socket) {
-        System.out.println("Na tym nasłuchuje tcp" + socket.getLocalPort() + socket.getLocalAddress());
         String response = null;
         while(true) {
             try {
@@ -125,31 +78,20 @@ public class Client {
         PrintWriter out = null;
         out = new PrintWriter(socket.getOutputStream(), true);
         out.println(message);
-//        while (true) {
-////            try {
-////                out = new PrintWriter(socket.getOutputStream(), true);
-////            } catch (IOException e) {
-////                throw new RuntimeException(e);
-////            }
-////            Scanner scanner = new Scanner(System.in);
-////            String message = scanner.nextLine();out.println(message);
-//        }
     }
 
-    private static void givePort(DatagramSocket ds, String hostName, int portNumber) throws IOException {
-        InetAddress addr = InetAddress.getByName(hostName);
-        byte[] sendBuffer = "".getBytes();
-        DatagramPacket dp = new DatagramPacket(sendBuffer, sendBuffer.length, addr, portNumber);
-        ds.send(dp);
-    }
-
-    private static void udpReceiveMessage(DatagramSocket socket) throws IOException {
+    private static void udpReceiveMessage(DatagramSocket socket){
         byte[] receiveBuffer = new byte[1024];
-        while(true) {
-        Arrays.fill(receiveBuffer, (byte)0);
-        DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-        socket.receive(receivePacket);
-        String msg = new String(receivePacket.getData());
-        System.out.println("received msg: " + msg);}
+        try {
+            while (true) {
+                Arrays.fill(receiveBuffer, (byte) 0);
+                DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+                socket.receive(receivePacket);
+                String msg = new String(receivePacket.getData());
+                System.out.println(msg);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

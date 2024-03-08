@@ -3,6 +3,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.*;
+import java.rmi.ServerError;
 import java.util.*;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -11,16 +12,30 @@ public class Server {
     private static final List<ClientAddress> addresses = new ArrayList<>();
 
     public void run(int port) throws IOException {
-        ServerSocket serverSocket = new ServerSocket(port);
-        Thread udpConnection = new Thread(new UDPConnection(port));
-        udpConnection.start();
+        ServerSocket serverSocket = null;
+        Thread udpConnection;
 
-        Integer clientId = 0;
-        while (true) {
-            Socket clientSocket = serverSocket.accept();
-            Thread tcpConnection = new Thread(new TCPConnection(clientSocket, clientId));
-            tcpConnection.start();
-            clientId += 1;
+        int clientId = 0;
+        try {
+            serverSocket = new ServerSocket(port);
+            udpConnection = new Thread(new UDPConnection(port));
+            udpConnection.start();
+            while (true) {
+                Socket clientSocket = serverSocket.accept();
+                Thread tcpConnection = new Thread(new TCPConnection(clientSocket, clientId));
+                tcpConnection.start();
+                clientId += 1;
+                if (clientId == Integer.MIN_VALUE) {
+                    System.out.println("Max amounts of clients is reached.");
+                    break;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (serverSocket != null) {
+            serverSocket.close();
+            }
         }
     }
 
@@ -110,21 +125,29 @@ public class Server {
             }
         }
 
-        private void broadcast(String message, Integer clientId) throws IOException {
+        private void broadcast(String message, Integer clientId) {
             System.out.println(message);
-            byte[] sendBuffer = message.getBytes();
-            for (ClientAddress data : addresses) {
-                if(!Objects.equals(clientId, data.getId())) {
-                    DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, data.getIp(), data.getPort());
-                    ds.send(sendPacket);
+            try {
+                byte[] sendBuffer = message.getBytes();
+                for (ClientAddress data : addresses) {
+                    if (!Objects.equals(clientId, data.getId())) {
+                        DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, data.getIp(), data.getPort());
+                        ds.send(sendPacket);
+                    }
                 }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
             Server server = new Server();
-            server.run(9009);
+            try {
+                server.run(9009);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
 }
 

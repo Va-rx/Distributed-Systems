@@ -12,14 +12,22 @@ public class Client {
     public static void main(String[] args) throws Exception {
         String hostName = "localhost";
         int portNumber = 9009;
+        int portMulti = 9999;
 
         Socket socket = new Socket(hostName, portNumber);
+
         DatagramSocket ds = new DatagramSocket(socket.getLocalPort());
+
+        InetAddress group = InetAddress.getByName("228.5.6.7");
+        MulticastSocket ms = new MulticastSocket(portMulti);
+        ms.joinGroup(group);
 
         Thread thread1 = new Thread(() -> Client.tcpReceiveMessage(socket));
         Thread thread2 = new Thread(() -> Client.udpReceiveMessage(ds));
+        Thread thread3 = new Thread(() -> Client.multicastReceiveMessage(ms));
         thread1.start();
         thread2.start();
+        thread3.start();
 
         while(true) {
             Scanner scanner = new Scanner(System.in);
@@ -50,6 +58,12 @@ public class Client {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+            }
+            else if(Objects.equals(message, "/M")) {
+                message = "trololo";
+                ms.leaveGroup(group);
+                DatagramPacket dp = new DatagramPacket(message.getBytes(), message.length(), group, portMulti);
+                ms.send(dp);
             }
             else {
                 tcpSendMessage(socket, message);
@@ -89,6 +103,21 @@ public class Client {
                 socket.receive(receivePacket);
                 String msg = new String(receivePacket.getData());
                 System.out.println(msg);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private static void multicastReceiveMessage(MulticastSocket socket) {
+        byte[] receiveBuffer = new byte[1024];
+        try {
+            while (true) {
+                Arrays.fill(receiveBuffer, (byte) 0);
+                DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+                socket.receive(receivePacket);
+                String msg = new String(receivePacket.getData());
+                System.out.println("from multicast: " + msg);
             }
         } catch (IOException e) {
             e.printStackTrace();

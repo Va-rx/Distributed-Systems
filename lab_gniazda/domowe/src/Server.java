@@ -13,7 +13,7 @@ public class Server {
 
     public void run(int port) throws IOException {
         ServerSocket serverSocket = null;
-        Thread udpConnection;
+        Thread udpConnection = null;
 
         int clientId = 0;
         try {
@@ -34,7 +34,7 @@ public class Server {
             e.printStackTrace();
         } finally {
             if (serverSocket != null) {
-            serverSocket.close();
+                serverSocket.close();
             }
         }
     }
@@ -122,6 +122,8 @@ public class Server {
                 }
             } catch (Exception e) {
                 throw new RuntimeException(e);
+            } finally {
+                this.ds.close();
             }
         }
 

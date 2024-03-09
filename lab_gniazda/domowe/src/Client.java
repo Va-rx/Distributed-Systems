@@ -10,34 +10,56 @@ import java.util.Scanner;
 
 public class Client {
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) {
         Client client = new Client();
         String hostName = "localhost";
         int portNumber = 9009;
         int portMulti = 9999;
-        client.run(hostName, portNumber, portMulti);
+        try {
+            client.run(hostName, portNumber, portMulti);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
+
     public void run(String host, int portUni, int portMulti) throws IOException {
-        Socket tcpSocket = tcpEstablishConnection(host, portUni);
-        DatagramSocket udpSocket = udpEstablishConnection(tcpSocket.getLocalPort());
+        Socket tcpSocket = null;
+        DatagramSocket udpSocket = null;
+        MulticastSocket multiSocket = null;
+        try {
+            tcpSocket = tcpEstablishConnection(host, portUni);
+            udpSocket = udpEstablishConnection(tcpSocket.getLocalPort());
 
-        InetAddress group = InetAddress.getByName("228.5.6.7");
-        MulticastSocket multiSocket = multiEstablishConnection(group, portMulti);
+            InetAddress group = InetAddress.getByName("228.5.6.7");
+            multiSocket = multiEstablishConnection(group, portMulti);
 
 
-        while (true) {
-            Scanner scanner = new Scanner(System.in);
-            String message = scanner.nextLine();
+            while (true) {
+                Scanner scanner = new Scanner(System.in);
+                String message = scanner.nextLine();
 
-            if (Objects.equals(message, "/U")) {
-                message = getMultilineMsgToSend("/U");
-                udpSendMessage(udpSocket, message, portUni);
-            } else if (Objects.equals(message, "/M")) {
-                message = getMultilineMsgToSend("/M");
-                multiSendMessage(multiSocket, group, portMulti, message);
-            } else {
-                tcpSendMessage(tcpSocket, message);
+                if (Objects.equals(message, "/U")) {
+                    message = getMultilineMsgToSend("/U");
+                    udpSendMessage(udpSocket, message, portUni);
+                } else if (Objects.equals(message, "/M")) {
+                    message = getMultilineMsgToSend("/M");
+                    multiSendMessage(multiSocket, group, portMulti, message);
+                } else {
+                    tcpSendMessage(tcpSocket, message);
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (tcpSocket != null) {
+                tcpSocket.close();
+            }
+            if (udpSocket != null) {
+                udpSocket.close();
+            }
+            if (multiSocket != null) {
+                multiSocket.close();
             }
         }
     }
@@ -131,6 +153,7 @@ public class Client {
     }
 
     private String getMultilineMsgToSend(String symbol) {
+        System.out.println("Multiline message enabled");
         Scanner scanner = new Scanner(System.in);
         String message = "";
         String new_line = null;
@@ -138,14 +161,10 @@ public class Client {
             new_line = scanner.nextLine();
             message = message.concat(new_line) + "\n";
         }
-        String[] lines = message.split("\\r?\\n");
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < lines.length - 1; i++) {
-            sb.append(lines[i]);
-            sb.append("\n");
-        }
-        message = sb.toString();
-        return message;
+        String[] lines = message.split("\n");
+        String[] newLines = new String[lines.length - 1];
+        System.arraycopy(lines, 0, newLines, 0, lines.length - 1);
+        return String.join("\n", newLines);
     }
 }
 

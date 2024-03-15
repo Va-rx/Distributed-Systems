@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import HTMLResponse
 import request
+from helper import generate_paragraph
 
 app = FastAPI()
 
@@ -15,7 +16,9 @@ async def root():
             <body>
                 <form method="get">
                     <label for="city">Enter city name:</label><br>
-                    <input type="text" id="city" name="city"><br><br>
+                    <input type="text" id="city" name="city"><br>
+                    <label for="city">Enter number of days:</label><br>
+                    <input type="number" value="2" id="days" min="1" max="2" name="days"><br><br>
                     <button type="submit" formaction="/current_weather">Current Weather</button>
                     <button type="submit" formaction="/forecast_weather">Forecast Weather</button>
                 </form>
@@ -54,6 +57,14 @@ async def current_weather_extended(city: str = Query(..., title="city")):
     <p>Sunset: {sunset}</p>
     """
 
+
+# free api gives access only for days: {1, 2} (tomorrow, after tomorrow)
 @app.get("/forecast_weather", response_class=HTMLResponse)
-async def forecast_weather(city: str = Query(..., title="city")):
-    pass
+async def get_weather_forecast(city: str = Query(...), days: int = Query(1)):
+    hours = request.get_forecast_weather(city, days)
+    result = generate_paragraph(hours)
+
+    return f"""
+    <h1>Forecast weather for {city}</h1>
+    {result}
+    """

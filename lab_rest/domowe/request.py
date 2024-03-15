@@ -53,6 +53,25 @@ def get_current_extended_weather(city: str):
     return temp_min_c, temp_max_c, is_mud, sunrise, sunset
 
 
+def get_forecast_weather(city: str, days: int):
+    response = get('http://api.weatherapi.com/v1/forecast.json?key=' + key1 + '&q=' + city + '&days=' + str(
+        days + 1) + '&aqi=no&alerts=no')
 
-def get_forecast_weather(city: str):
-    pass
+    json = response.json()
+
+    day = [None for _ in range(days)]
+    for i in range(days):
+        day[i] = json["forecast"]["forecastday"][i+1]
+
+    dates = [None for _ in range(days)]
+    for i in range(days):
+        dates[i] = day[i]["date"]
+
+    hours = 5 # 6 10 14 18 22
+    hour_temp = [[None for _ in range(hours)] for _ in range(days)]
+    for i in range(days):
+        for j in range(hours):
+            hour_temp[i][j] = (day[i]["hour"][6 + j*4]["time"], day[i]["hour"][6 + j*4]["temp_c"])
+    # print(hour_temp)
+    return hour_temp
+

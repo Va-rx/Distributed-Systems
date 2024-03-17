@@ -36,7 +36,7 @@ async def current_weather(city: str = Query(..., title="city")):
     <p>Feels like temperature: {fltemp}C</p>
     <p>Clouds: {cloud}%</p>
     <p>Humidity: {humidity}</p>
-    
+
     <form action="/current_weather/extended" method="get">
     <input type="hidden" name="city" value="{city}">
     <button type="submit">Extended details</button>

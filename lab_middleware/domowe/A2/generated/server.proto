@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+enum EventType {
+  KIDS = 0;
+  ADULTS = 1;
+  SENIORS = 2;
+}
+
+
+service EventService {
+  rpc getAllEvents (Empty) returns (stream Event) {}
+
+  rpc subscribeEvent (EventSubscriptionRequest) returns (Event) {}
+
+  rpc getSubscribedEvents (UserId) returns (stream Event) {}
+
+  rpc unsubscribeEvent (EventSubscriptionRequest) returns (Event) {}
+
+  rpc notifySubscribers (UserId) returns (stream Event) {}
+}
+
+message Event {
+  string event_id = 1;
+  string name = 2;
+  EventType type = 3;
+  string date = 4;
+  string location = 5;
+  uint32 maxParticipants = 6;
+}
+
+message EventSubscriptionRequest {
+  string user_id = 1;
+  string event_id = 2;
+}
+
+message UserId {
+  string user_id = 1;
+}
+
+message Empty { }

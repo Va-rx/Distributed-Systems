@@ -2,23 +2,31 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.impl.AMQBasicProperties;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeoutException;
+import java.util.UUID;
+
 
 public class Doctor {
+
+    private final String privateQueueName;
 
     private static final String KNEE_QUEUE_NAME = "knee_queue";
     private static final String HIP_QUEUE_NAME = "hip_queue";
     private static final String ELBOW_QUEUE_NAME = "elbow_queue";
-    private static final String RESULT_QUEUE_NAME = "result_queue";
+    private static final String LOG_QUEUE_NAME = "log_queue";
 
     private Channel channel;
 
     public Doctor() {
+        String id = UUID.randomUUID().toString();
+        privateQueueName = "doctor_queue_" + id;
         ConnectionFactory factory = new ConnectionFactory();
         factory.setHost("localhost");
         try {
@@ -36,17 +44,26 @@ public class Doctor {
 
         Channel channel = doctor.getChannel();
 
+        channel.exchangeDeclare("szpital", "topic");
+
         channel.queueDeclare(KNEE_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(HIP_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(ELBOW_QUEUE_NAME, false, false, false, null);
-        channel.queueDeclare(RESULT_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(LOG_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(doctor.privateQueueName, false, false, false, null);
 
         DeliverCallback deliverCallback = (consumerTag, delivery) -> {
             String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
             System.out.println("[+] I've received results: " + message);
         };
         boolean autoAck = true;
-        channel.basicConsume(RESULT_QUEUE_NAME, autoAck, deliverCallback, consumerTag -> { });
+        channel.basicConsume(doctor.privateQueueName, autoAck, deliverCallback, consumerTag -> { });
+
+        DeliverCallback deliverCallbackLog = (consumerTag, delivery) -> {
+            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            System.out.println("[ADMIN]: " + message);
+        };
+        channel.basicConsume(LOG_QUEUE_NAME, autoAck, deliverCallbackLog, consumerTag -> { });
 
 
         while(true) {
@@ -89,14 +106,26 @@ public class Doctor {
     }
 
     private void kneePublish(String message) throws IOException {
-        channel.basicPublish("", KNEE_QUEUE_NAME, null, message.getBytes());
-
+        AMQP.BasicProperties props = prepareProperties(privateQueueName);
+        channel.basicPublish("", KNEE_QUEUE_NAME, props, message.getBytes());
+        //channel.basicPublish("", LOG_QUEUE_NAME, null, message.getBytes());
     }
     private void hipPublish(String message) throws IOException {
-        channel.basicPublish("", HIP_QUEUE_NAME, null, message.getBytes());
+        AMQP.BasicProperties props = prepareProperties(privateQueueName);
+        channel.basicPublish("", HIP_QUEUE_NAME, props, message.getBytes());
+        //channel.basicPublish("", LOG_QUEUE_NAME, null, message.getBytes());
     }
     private void elbowPublish(String message) throws IOException {
-        channel.basicPublish("", ELBOW_QUEUE_NAME, null, message.getBytes());
+        AMQP.BasicProperties props = prepareProperties(privateQueueName);
+        channel.basicPublish("", ELBOW_QUEUE_NAME, props, message.getBytes());
+        //channel.basicPublish("", LOG_QUEUE_NAME, null, message.getBytes());
+    }
+
+    private static AMQP.BasicProperties prepareProperties(String privateQueueName) {
+        return new AMQP.BasicProperties
+                .Builder()
+                .replyTo(privateQueueName)
+                .build();
     }
 
     public Channel getChannel() {

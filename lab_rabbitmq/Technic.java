@@ -1,8 +1,4 @@
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.DeliverCallback;
-import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.*;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -17,7 +13,9 @@ public class Technic {
     private static final String HIP_QUEUE_NAME = "hip_queue";
     private static final String ELBOW_QUEUE_NAME = "elbow_queue";
     private static final String RESULT_QUEUE_NAME = "result_queue";
-    private static final String LOG_QUEUE_NAME = "log_queue";
+    private static final String LOG_POST_QUEUE_NAME = "log_post_queue";
+    private static final String LOG_GET_QUEUE_NAME = "log_get_queue";
+    private static final String EXCHANGE_NAME = "logs";
 
     private static final Set<String> SPECIALIZATIONS = Set.of("KNEE", "HIP", "ELBOW");
 
@@ -40,8 +38,12 @@ public class Technic {
         Technic technic = new Technic();
         Channel channel = technic.getChannel();
         channel.basicQos(1);
+        channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.FANOUT);
+        String name = channel.queueDeclare().getQueue();
+        channel.queueBind(name, EXCHANGE_NAME, "");
         channel.queueDeclare(RESULT_QUEUE_NAME, false, false, false, null);
-        channel.queueDeclare(LOG_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(LOG_GET_QUEUE_NAME, false, false, false, null);
+        channel.queueDeclare(LOG_POST_QUEUE_NAME, false, false, false, null);
         String[] specializations = new String[2];
         int index = 0;
         while(index != 2) {
@@ -73,6 +75,8 @@ public class Technic {
                     System.out.println("[-] I've finished a task. Sending results to a doctor");
                     message += " done";
                     channel.basicPublish("", delivery.getProperties().getReplyTo(), replyProps, message.getBytes());
+                    channel.basicPublish("", LOG_POST_QUEUE_NAME, null, message.getBytes());
+
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 } finally {
@@ -86,9 +90,9 @@ public class Technic {
 
             DeliverCallback deliverCallbackLog = (consumerTag, delivery) -> {
             String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-            System.out.println("[ADMIN]: " + message);
+            System.out.println("[*]: " + message);
             };
-        channel.basicConsume(LOG_QUEUE_NAME, true, deliverCallbackLog, consumerTag -> { });
+        channel.basicConsume(name, true, deliverCallbackLog, consumerTag -> { });
     }
     private void makeQueues(String[] specializations) throws IOException {
         String[] queueNames = new String[2];

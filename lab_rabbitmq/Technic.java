@@ -12,9 +12,7 @@ public class Technic {
     private static final String KNEE_QUEUE_NAME = "knee_queue";
     private static final String HIP_QUEUE_NAME = "hip_queue";
     private static final String ELBOW_QUEUE_NAME = "elbow_queue";
-    private static final String RESULT_QUEUE_NAME = "result_queue";
     private static final String LOG_POST_QUEUE_NAME = "log_post_queue";
-    private static final String LOG_GET_QUEUE_NAME = "log_get_queue";
     private static final String EXCHANGE_NAME = "logs";
 
     private static final Set<String> SPECIALIZATIONS = Set.of("KNEE", "HIP", "ELBOW");
@@ -35,64 +33,22 @@ public class Technic {
 
     public static void main(String[] args) throws Exception {
         System.out.println("TECHNIC");
+
         Technic technic = new Technic();
         Channel channel = technic.getChannel();
+        String[] specializations = technic.readSpecializationsFromInput();
+
         channel.basicQos(1);
         channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.FANOUT);
-        String name = channel.queueDeclare().getQueue();
-        channel.queueBind(name, EXCHANGE_NAME, "");
-        channel.queueDeclare(RESULT_QUEUE_NAME, false, false, false, null);
-        channel.queueDeclare(LOG_GET_QUEUE_NAME, false, false, false, null);
+        String logQueueName = channel.queueDeclare().getQueue();
+
+        channel.queueBind(logQueueName, EXCHANGE_NAME, "");
         channel.queueDeclare(LOG_POST_QUEUE_NAME, false, false, false, null);
-        String[] specializations = new String[2];
-        int index = 0;
-        while(index != 2) {
-            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-            System.out.println("Please enter specialization no. " + (index+1));
-            String specialization = br.readLine().toUpperCase();
-            if (SPECIALIZATIONS.contains(specialization)) {
-                specializations[index] = specialization;
-                index++;
-            }
-            else {
-                System.out.println("WRONG SPECIALIZATION");
-            }
-        }
+
         technic.makeQueues(specializations);
-        String[] queueNames = technic.getQueueNames();
-        for(String queueName : queueNames) {
-            System.out.println(queueName);
-        }
-            DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-                String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-                System.out.println("[+] I've received a " + message);
-                AMQP.BasicProperties replyProps = new AMQP.BasicProperties
-                        .Builder()
-                        .correlationId(delivery.getProperties().getCorrelationId())
-                        .build();
-                try {
-                    Thread.sleep(5000);
-                    System.out.println("[-] I've finished a task. Sending results to a doctor");
-                    message += " done";
-                    channel.basicPublish("", delivery.getProperties().getReplyTo(), replyProps, message.getBytes());
-                    channel.basicPublish("", LOG_POST_QUEUE_NAME, null, message.getBytes());
 
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                } finally {
-                    channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
-                }
-            };
-
-            boolean autoAck = false;
-            channel.basicConsume(queueNames[0], autoAck, deliverCallback, consumerTag -> { });
-            channel.basicConsume(queueNames[1], autoAck, deliverCallback, consumerTag -> { });
-
-            DeliverCallback deliverCallbackLog = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-            System.out.println("[*]: " + message);
-            };
-        channel.basicConsume(name, true, deliverCallbackLog, consumerTag -> { });
+        technic.receiveTask();
+        technic.receiveLogs(logQueueName);
     }
     private void makeQueues(String[] specializations) throws IOException {
         String[] queueNames = new String[2];
@@ -129,5 +85,65 @@ public class Technic {
 
     public String[] getQueueNames() {
         return queueNames;
+    }
+
+    private String[] readSpecializationsFromInput() throws IOException {
+        String[] specializations = new String[2];
+        int index = 0;
+        while(index != 2) {
+            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+            System.out.println("Please enter specialization no. " + (index+1));
+            String specialization = br.readLine().toUpperCase();
+            if (SPECIALIZATIONS.contains(specialization)) {
+                specializations[index] = specialization;
+                index++;
+            }
+            else {
+                System.out.println("WRONG SPECIALIZATION");
+            }
+        }
+        return specializations;
+    }
+
+    private void receiveLogs(String logQueueName) throws IOException {
+        DeliverCallback deliverCallbackLog = (consumerTag, delivery) -> {
+            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            System.out.println("[*]: " + message);
+        };
+        channel.basicConsume(logQueueName, true, deliverCallbackLog, consumerTag -> { });
+    }
+
+    private void receiveTask() throws IOException {
+        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            System.out.println("[+] I've received a " + message);
+
+            try {
+                message = makeTask(message, delivery);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            resultsPublish(message, delivery);
+        };
+        channel.basicConsume(queueNames[0], false, deliverCallback, consumerTag -> { });
+        channel.basicConsume(queueNames[1], false, deliverCallback, consumerTag -> { });
+    }
+
+    private String makeTask(String message, Delivery delivery) throws InterruptedException, IOException {
+        Thread.sleep(5000);
+        System.out.println("[-] I've finished a task. Sending results to a doctor");
+        message += " done";
+        channel.basicAck(delivery.getEnvelope().getDeliveryTag(), false);
+        return message;
+    }
+
+    private void resultsPublish(String message, Delivery delivery) throws IOException {
+        AMQP.BasicProperties replyProps = new AMQP.BasicProperties
+                .Builder()
+                .correlationId(delivery.getProperties().getCorrelationId())
+                .build();
+
+        channel.basicPublish("", delivery.getProperties().getReplyTo(), replyProps, message.getBytes());
+        channel.basicPublish("", LOG_POST_QUEUE_NAME, null, message.getBytes());
     }
 }

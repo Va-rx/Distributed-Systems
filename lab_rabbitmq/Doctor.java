@@ -16,7 +16,6 @@ public class Doctor {
     private static final String HIP_QUEUE_NAME = "hip_queue";
     private static final String ELBOW_QUEUE_NAME = "elbow_queue";
     private static final String LOG_POST_QUEUE_NAME = "log_post_queue";
-    private static final String LOG_GET_QUEUE_NAME = "log_get_queue";
     private static final String EXCHANGE_NAME = "logs";
 
     private Channel channel;
@@ -37,34 +36,22 @@ public class Doctor {
 
     public static void main(String[] args) throws IOException {
         System.out.println("DOCTOR");
-        Doctor doctor = new Doctor();
 
+        Doctor doctor = new Doctor();
         Channel channel = doctor.getChannel();
 
         channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.FANOUT);
-        String name = channel.queueDeclare().getQueue();
-        channel.queueBind(name, EXCHANGE_NAME, "");
+        String logQueueName = channel.queueDeclare().getQueue();
+        channel.queueBind(logQueueName, EXCHANGE_NAME, "");
 
         channel.queueDeclare(KNEE_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(HIP_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(ELBOW_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(LOG_POST_QUEUE_NAME, false, false, false, null);
-        channel.queueDeclare(LOG_GET_QUEUE_NAME, false, false, false, null);
         channel.queueDeclare(doctor.privateQueueName, false, false, false, null);
 
-        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-            System.out.println("[+] I've received results: " + message);
-        };
-        boolean autoAck = true;
-        channel.basicConsume(doctor.privateQueueName, autoAck, deliverCallback, consumerTag -> { });
-
-        DeliverCallback deliverCallbackLog = (consumerTag, delivery) -> {
-            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
-            System.out.println("[*]: " + message);
-        };
-        channel.basicConsume(name, autoAck, deliverCallbackLog, consumerTag -> { });
-
+        doctor.receiveResults();
+        doctor.receiveLogs(logQueueName);
 
         while(true) {
             BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
@@ -119,6 +106,21 @@ public class Doctor {
         AMQP.BasicProperties props = prepareProperties(privateQueueName);
         channel.basicPublish("", ELBOW_QUEUE_NAME, props, message.getBytes());
         channel.basicPublish("", LOG_POST_QUEUE_NAME, null, message.getBytes());
+    }
+
+    private void receiveResults() throws IOException {
+        DeliverCallback deliverCallback = (consumerTag, delivery) -> {
+            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            System.out.println("[+] I've received results: " + message);
+        };
+        channel.basicConsume(privateQueueName, true, deliverCallback, consumerTag -> { });
+    }
+    private void receiveLogs(String logQueueName) throws IOException {
+        DeliverCallback deliverCallbackLog = (consumerTag, delivery) -> {
+            String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
+            System.out.println("[*]: " + message);
+        };
+        channel.basicConsume(logQueueName, true, deliverCallbackLog, consumerTag -> { });
     }
 
     private static AMQP.BasicProperties prepareProperties(String privateQueueName) {

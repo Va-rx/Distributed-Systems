@@ -1,7 +1,6 @@
 import com.rabbitmq.client.*;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
@@ -20,6 +19,7 @@ public class Admin {
 
         channel.exchangeDeclare(EXCHANGE_NAME, BuiltinExchangeType.FANOUT);
         channel.queueDeclare(LOG_POST_QUEUE_NAME, false, false, false, null);
+
         DeliverCallback deliverCallbackLog = (consumerTag, delivery) -> {
             String message = new String(delivery.getBody(), StandardCharsets.UTF_8);
             System.out.println("[*]: " + message);
@@ -30,7 +30,7 @@ public class Admin {
         while (true) {
             System.out.println("Enter message to broadcast:");
             String message = br.readLine();
-            channel.basicPublish(EXCHANGE_NAME, "", null, message.getBytes("UTF-8"));
+            channel.basicPublish(EXCHANGE_NAME, "", null, message.getBytes(StandardCharsets.UTF_8));
             System.out.println("[-] Sent '" + message + "'");
         }
     }

@@ -14,11 +14,11 @@ public class ZNodeWatcher implements Watcher {
     private Process process;
 
     public static void main(String[] args) throws IOException, InterruptedException, KeeperException {
-        ZNodeWatcher zNodeMonitor = new ZNodeWatcher();
-        new Thread(zNodeMonitor::listenForConsoleInput).start();
-        zNodeMonitor.connectToZookeeper();
-        zNodeMonitor.watchZNode();
-        zNodeMonitor.run();
+        ZNodeWatcher zNodeWatcher = new ZNodeWatcher();
+        new Thread(zNodeWatcher::listenForConsoleInput).start();
+        zNodeWatcher.connectToZookeeper();
+        zNodeWatcher.watchZNode();
+        zNodeWatcher.run();
     }
 
     public void connectToZookeeper() throws IOException {

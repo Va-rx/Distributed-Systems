@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Scanner;
 
-public class ZNodeMonitor implements Watcher {
+public class ZNodeWatcher implements Watcher {
 
     private static final String ZOOKEEPER_ADDRESS = "localhost:2181";
     private static final int SESSION_TIMEOUT = 3000;
@@ -14,7 +14,7 @@ public class ZNodeMonitor implements Watcher {
     private Process process;
 
     public static void main(String[] args) throws IOException, InterruptedException, KeeperException {
-        ZNodeMonitor zNodeMonitor = new ZNodeMonitor();
+        ZNodeWatcher zNodeMonitor = new ZNodeWatcher();
         new Thread(zNodeMonitor::listenForConsoleInput).start();
         zNodeMonitor.connectToZookeeper();
         zNodeMonitor.watchZNode();
